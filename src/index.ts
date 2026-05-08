@@ -1,47 +1,86 @@
 import { QuizQuestion, QuizInfo } from "./types";
 
-const waitFor = (fn: () => boolean, timeoutMs: number = 15000, intervalMs: number = 500): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    if (fn()) { resolve(); return; }
-    const timer = setTimeout(() => {
-      clearInterval(iv);
-      reject(new Error("Timeout menunggu: " + fn.toString().substring(0, 60)));
-    }, timeoutMs);
+function waitForPinia(): Promise<any> {
+  return new Promise((resolve) => {
+    const check = () => {
+      try {
+        const root = document.querySelector("#root");
+        if (!root) return false;
+        const app = (root as any).__vue_app__;
+        if (!app) return false;
+        const pinia = app.config.globalProperties.$pinia;
+        if (!pinia) return false;
+        resolve(pinia);
+        return true;
+      } catch { return false; }
+    };
+    if (check()) return;
+    console.log("[Wayground Cheat MDW] Menunggu Vue app & Pinia...");
     const iv = setInterval(() => {
-      if (fn()) { clearTimeout(timer); clearInterval(iv); resolve(); }
-    }, intervalMs);
+      if (check()) clearInterval(iv);
+    }, 500);
   });
-};
+}
 
-const getPiniaInstance = () => {
+function waitForRoomHash(pinia: any): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let dots = 0;
+    const maxWait = 300000;
+    const startTime = Date.now();
+
+    const check = () => {
+      try {
+        const store = pinia._s.get("gameData");
+        if (!store) return false;
+        const rh = store.$state.roomHash;
+        if (rh && typeof rh === "string" && rh.length > 0) {
+          resolve(rh);
+          return true;
+        }
+        return false;
+      } catch { return false; }
+    };
+
+    if (check()) return;
+
+    console.log("[Wayground Cheat MDW] Menunggu kamu join game... (script tetap aktif)");
+
+    const iv = setInterval(() => {
+      if (check()) {
+        clearInterval(iv);
+        return;
+      }
+      const elapsed = Date.now() - startTime;
+      if (elapsed > maxWait) {
+        clearInterval(iv);
+        reject(new Error("Timeout 5 menit. Join game lalu paste ulang scriptnya."));
+        return;
+      }
+      dots++;
+      if (dots % 20 === 0) {
+        const sec = Math.floor(elapsed / 1000);
+        console.log("[Wayground Cheat MDW] Masih menunggu... (" + sec + " detik)");
+      }
+    }, 500);
+  });
+}
+
+function getPiniaInstance(): any {
   const root = document.querySelector("#root");
-  if (!root) throw new Error("Tidak ada #root");
-  const vueApp = (root as any).__vue_app__;
-  if (!vueApp) throw new Error("Tidak ada Vue app");
-  const pinia = vueApp.config.globalProperties.$pinia;
-  if (!pinia) throw new Error("Tidak ada Pinia");
-  return pinia;
-};
+  if (!root) throw new Error("No #root");
+  const app = (root as any).__vue_app__;
+  if (!app) throw new Error("No Vue app");
+  return app.config.globalProperties.$pinia;
+}
 
-const getRoomHash = (): string => {
-  const pinia = getPiniaInstance();
-  const store = pinia._s.get("gameData");
-  if (!store) throw new Error("Tidak ada store gameData");
-  const rh = store.$state.roomHash;
-  if (!rh) throw new Error("Tidak ada roomHash");
-  return rh;
-};
-
-const getCurrentQuestionId = (): string => {
+function getCurrentQuestionId(): string {
   const pinia = getPiniaInstance();
   const store = pinia._s.get("gameQuestions");
-  if (!store) throw new Error("Tidak ada store gameQuestions");
-  const id = store.$state.currentId || store.$state.currentQuestionId;
-  if (!id) throw new Error("Tidak ada currentId");
-  return id;
-};
+  if (!store) throw new Error("No gameQuestions");
+  return store.$state.currentId || store.$state.currentQuestionId;
+}
 
-const getOptionElements = (): HTMLElement[] => {
+function getOptionElements(): HTMLElement[] {
   const roleOptions = Array.from(document.querySelectorAll<HTMLElement>("[role='option']"));
   if (roleOptions.length >= 2) {
     const filtered = roleOptions.filter((el) => {
@@ -72,26 +111,22 @@ const getOptionElements = (): HTMLElement[] => {
     }
   }
 
-  throw new Error("Tidak ada elemen opsi ditemukan");
-};
+  throw new Error("Tidak ada opsi ditemukan");
+}
 
-const stripHtml = (html: string): string => {
+function stripHtml(html: string): string {
   const tmp = document.createElement("div");
   tmp.innerHTML = html;
   return tmp.textContent || tmp.innerText || "";
-};
+}
 
-const highlightAnswers = (question: QuizQuestion) => {
-  if (question.type !== "MCQ" && question.type !== "MSQ") {
-    return;
-  }
+function highlightAnswers(question: QuizQuestion) {
+  if (question.type !== "MCQ" && question.type !== "MSQ") return;
 
   let optionElements: HTMLElement[];
   try {
     optionElements = getOptionElements();
-  } catch {
-    return;
-  }
+  } catch { return; }
 
   const options = question.structure.options;
   if (!options || !Array.isArray(options) || options.length === 0) return;
@@ -161,60 +196,59 @@ const highlightAnswers = (question: QuizQuestion) => {
   });
 
   if (correctCount > 0) {
-    console.log("[Wayground Cheat] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi");
+    console.log("[Wayground Cheat MDW] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi");
   }
-};
+}
 
-async function fetchQuizData(): Promise<QuizInfo> {
-  const roomHash = getRoomHash();
-  console.log("[Wayground Cheat] Room hash: " + roomHash);
-
-  const response = await fetch("https://wayground.com/_api/main/game/" + roomHash);
-  if (!response.ok) throw new Error("API error: " + response.status);
-
-  const quiz: any = await response.json();
-  if (!quiz || !quiz.data || !Array.isArray(quiz.data.questions) || quiz.data.questions.length === 0) {
-    throw new Error("Data tidak valid dari API");
+async function fetchQuizData(roomHash: string): Promise<QuizInfo> {
+  const url = "https://wayground.com/_api/main/game/" + roomHash;
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("HTTP " + response.status);
+      const quiz: any = await response.json();
+      if (!quiz || !quiz.data || !Array.isArray(quiz.data.questions) || quiz.data.questions.length === 0) {
+        throw new Error("Data kosong dari API");
+      }
+      return quiz;
+    } catch (err: any) {
+      console.warn("[Wayground Cheat MDW] Percobaan " + attempt + "/3 gagal: " + (err.message || err));
+      if (attempt < 3) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
   }
-
-  console.log("[Wayground Cheat] " + quiz.data.questions.length + " pertanyaan dimuat");
-  return quiz;
+  throw new Error("Gagal fetch data setelah 3 percobaan");
 }
 
 async function main() {
   console.log("%c Wayground Cheat MDW ", "background:#1B3A5C;color:#fff;font-size:14px;font-weight:bold;padding:4px 8px;border-radius:4px;");
 
+  let pinia: any;
   try {
-    await waitFor(() => {
-      try { getPiniaInstance(); return true; } catch { return false; }
-    }, 20000, 500);
-  } catch {
-    console.error("[Wayground Cheat] Gagal menemukan Vue/Pinia. Pastikan sudah join game.");
+    pinia = await waitForPinia();
+    console.log("[Wayground Cheat MDW] Vue app & Pinia ditemukan");
+  } catch (err: any) {
+    console.error("[Wayground Cheat MDW] Gagal: " + (err.message || err));
     return;
   }
 
+  let roomHash: string;
   try {
-    await waitFor(() => {
-      try { getRoomHash(); return true; } catch { return false; }
-    }, 30000, 1000);
-  } catch {
-    console.error("[Wayground Cheat] Gagal mendapatkan roomHash. Pastikan sudah join game.");
+    roomHash = await waitForRoomHash(pinia);
+    console.log("[Wayground Cheat MDW] Game terdeteksi! Room: " + roomHash);
+  } catch (err: any) {
+    console.error("[Wayground Cheat MDW] " + (err.message || err));
     return;
   }
 
   let quiz: QuizInfo;
   try {
-    quiz = await fetchQuizData();
+    quiz = await fetchQuizData(roomHash);
+    console.log("[Wayground Cheat MDW] " + quiz.data.questions.length + " pertanyaan berhasil dimuat");
   } catch (err: any) {
-    console.error("[Wayground Cheat] Gagal fetch data: " + (err.message || err));
-    console.log("[Wayground Cheat] Retry dalam 3 detik...");
-    await new Promise(r => setTimeout(r, 3000));
-    try {
-      quiz = await fetchQuizData();
-    } catch (err2: any) {
-      console.error("[Wayground Cheat] Gagal lagi: " + (err2.message || err2));
-      return;
-    }
+    console.error("[Wayground Cheat MDW] " + (err.message || err));
+    return;
   }
 
   let lastQuestionID: string | undefined = undefined;
@@ -222,7 +256,7 @@ async function main() {
   const loop = () => {
     try {
       const questionInfo = getCurrentQuestionId();
-      if (questionInfo !== lastQuestionID) {
+      if (questionInfo && questionInfo !== lastQuestionID) {
         for (const q of quiz.data.questions) {
           if (questionInfo === q._id) {
             highlightAnswers(q);
@@ -236,7 +270,7 @@ async function main() {
 
   setInterval(loop, 500);
   loop();
-  console.log("[Wayground Cheat] Aktif! Jawaban benar akan otomatis disorot.");
+  console.log("[Wayground Cheat MDW] AKTIF! Jawaban benar otomatis disorot.");
 }
 
 main();
