@@ -69,18 +69,34 @@ const stripHtml = (html: string): string => {
   return tmp.textContent || tmp.innerText || "";
 };
 
-let prevHighlightedElements: HTMLElement[] = [];
+const normalizeText = (text: string): string => {
+  return text.trim().toLowerCase().replace(/\s+/g, " ");
+};
 
-const resetPreviousHighlights = () => {
-  for (const el of prevHighlightedElements) {
-    if (el && el.parentNode) {
-      el.style.opacity = "";
-      el.style.outline = "";
-      el.style.outlineOffset = "";
-      el.style.transition = "";
-    }
+const wordsMatch = (domText: string, correctText: string): boolean => {
+  const domWords = new Set(domText.split(/\s+/).filter(w => w.length > 1));
+  const correctWords = new Set(correctText.split(/\s+/).filter(w => w.length > 1));
+
+  if (correctWords.size === 0) return false;
+  if (domWords.size === 0) return false;
+
+  const correctWordsArr = Array.from(correctWords);
+  for (let w = 0; w < correctWordsArr.length; w++) {
+    if (!domWords.has(correctWordsArr[w])) return false;
   }
-  prevHighlightedElements = [];
+
+  return true;
+};
+
+const clearAllOptionStyles = () => {
+  const allOptions = Array.from(document.querySelectorAll<HTMLElement>("[role='option']"));
+  for (let i = 0; i < allOptions.length; i++) {
+    const el = allOptions[i];
+    el.style.opacity = "";
+    el.style.outline = "";
+    el.style.outlineOffset = "";
+    el.style.transition = "";
+  }
 };
 
 const highlightAnswers = (question: QuizQuestion): boolean => {
@@ -114,82 +130,59 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
 
   if (correctAnswerIndices.length === 0) return false;
 
-  const correctAnswerTexts: string[] = [];
-  correctAnswerIndices.forEach((idx) => {
+  const correctTexts: string[] = [];
+  for (const idx of correctAnswerIndices) {
     const opt = options[idx];
     if (opt) {
-      const txt = stripHtml(opt.text).trim().toLowerCase();
+      const txt = normalizeText(stripHtml(opt.text));
       if (txt.length > 0) {
-        correctAnswerTexts.push(txt);
+        correctTexts.push(txt);
       }
     }
-  });
+  }
 
-  resetPreviousHighlights();
+  if (correctTexts.length === 0) return false;
 
-  const matchedElements: Set<number> = new Set();
-  const matchedTexts: Set<string> = new Set();
+  clearAllOptionStyles();
 
-  for (let domIndex = 0; domIndex < optionElements.length; domIndex++) {
-    if (matchedElements.has(domIndex)) continue;
+  const matchedDomIndices = new Set<number>();
+  const usedCorrectTexts = new Set<number>();
 
-    const elem = optionElements[domIndex];
-    const elemText = stripHtml(elem.textContent || "").trim().toLowerCase();
+  for (let i = 0; i < optionElements.length; i++) {
+    const elem = optionElements[i];
+    const elemText = normalizeText(stripHtml(elem.textContent || ""));
 
-    let isCorrect = false;
-
-    if (correctAnswerIndices.indexOf(domIndex) !== -1) {
-      isCorrect = true;
+    for (let c = 0; c < correctTexts.length; c++) {
+      if (usedCorrectTexts.has(c)) continue;
+      if (elemText === correctTexts[c]) {
+        matchedDomIndices.add(i);
+        usedCorrectTexts.add(c);
+        break;
+      }
     }
+  }
 
-    if (!isCorrect && correctAnswerTexts.length > 0) {
-      for (const correctText of correctAnswerTexts) {
-        if (matchedTexts.has(correctText)) continue;
-        if (elemText.length === 0 || correctText.length === 0) continue;
+  if (matchedDomIndices.size === 0) {
+    for (let i = 0; i < optionElements.length; i++) {
+      if (matchedDomIndices.has(i)) continue;
+      const elem = optionElements[i];
+      const elemText = normalizeText(stripHtml(elem.textContent || ""));
 
-        if (elemText === correctText) {
-          isCorrect = true;
-          matchedTexts.add(correctText);
+      for (let c = 0; c < correctTexts.length; c++) {
+        if (usedCorrectTexts.has(c)) continue;
+        if (wordsMatch(elemText, correctTexts[c])) {
+          matchedDomIndices.add(i);
+          usedCorrectTexts.add(c);
           break;
         }
       }
     }
-
-    if (!isCorrect && correctAnswerTexts.length > 0) {
-      for (const correctText of correctAnswerTexts) {
-        if (matchedTexts.has(correctText)) continue;
-        if (elemText.length === 0 || correctText.length === 0) continue;
-
-        const minLen = Math.min(elemText.length, correctText.length);
-        if (minLen > 3 && (elemText.length / correctText.length > 0.5 && correctText.length / elemText.length > 0.5)) {
-          if (elemText.indexOf(correctText) !== -1 || correctText.indexOf(elemText) !== -1) {
-            isCorrect = true;
-            matchedTexts.add(correctText);
-            break;
-          }
-        }
-      }
-    }
-
-    if (!isCorrect) {
-      const cl = elem.className || "";
-      const clStr = typeof cl === "object" ? Array.prototype.join.call(cl, " ") : cl;
-      const match = clStr.match(/\boption-(\d+)\b/);
-      if (match) {
-        const classIndex = parseInt(match[1], 10) - 1;
-        if (correctAnswerIndices.indexOf(classIndex) !== -1) isCorrect = true;
-      }
-    }
-
-    if (isCorrect) {
-      matchedElements.add(domIndex);
-    }
   }
 
   let correctCount = 0;
-  optionElements.forEach((elem, domIndex) => {
-    prevHighlightedElements.push(elem);
-    if (matchedElements.has(domIndex)) {
+  for (let i = 0; i < optionElements.length; i++) {
+    const elem = optionElements[i];
+    if (matchedDomIndices.has(i)) {
       elem.style.outline = "3px solid #4CAF50";
       elem.style.outlineOffset = "2px";
       elem.style.transition = "outline 0.3s ease";
@@ -198,7 +191,7 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
       elem.style.opacity = "0.2";
       elem.style.transition = "opacity 0.3s ease";
     }
-  });
+  }
 
   if (correctCount > 0) {
     console.log("[Wayground Cheat MDW] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi");
