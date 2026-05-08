@@ -30,8 +30,8 @@ const showNotification = (message: string, type: "success" | "error" | "info") =
 };
 
 const isWaygroundJoin = (): boolean => {
-  const url = window.location.href.toLowerCase();
-  return url.indexOf("wayground.com/join") !== -1;
+  const path = window.location.pathname;
+  return path === "/join" || path === "/join/";
 };
 
 const getPiniaInstance = () => {
