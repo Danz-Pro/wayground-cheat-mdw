@@ -235,6 +235,41 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
   return false;
 };
 
+let scriptActive = false;
+let intervalId: any = null;
+
+const stopScript = () => {
+  scriptActive = false;
+  if (intervalId !== null) {
+    clearInterval(intervalId);
+    intervalId = null;
+  }
+  clearAllOptionStyles();
+  console.log("[Wayground Cheat MDW] Script dihentikan. Navigasi keluar dari /join");
+  showNotification("Script dihentikan", "error");
+};
+
+const watchUrlChange = () => {
+  const origPush = history.pushState;
+  const origReplace = history.replaceState;
+
+  history.pushState = function() {
+    const result = origPush.apply(this, arguments as any);
+    if (!isWaygroundJoin() && scriptActive) stopScript();
+    return result;
+  };
+
+  history.replaceState = function() {
+    const result = origReplace.apply(this, arguments as any);
+    if (!isWaygroundJoin() && scriptActive) stopScript();
+    return result;
+  };
+
+  window.addEventListener("popstate", function() {
+    if (!isWaygroundJoin() && scriptActive) stopScript();
+  });
+};
+
 async function main() {
   if (!isWaygroundJoin()) {
     console.error("[Wayground Cheat MDW] Script hanya bisa diaktifkan di wayground.com/join");
@@ -242,12 +277,16 @@ async function main() {
     return;
   }
 
+  scriptActive = true;
+  watchUrlChange();
+
   console.log("%c Wayground Cheat MDW ", "background:#1B3A5C;color:#fff;font-size:14px;font-weight:bold;padding:4px 8px;border-radius:4px;");
   console.log("[Wayground Cheat MDW] Menunggu game dimulai...");
   showNotification("Script aktif! Menunggu kamu join game...", "success");
 
   let roomHash = "";
   for (let i = 0; i < 120; i++) {
+    if (!scriptActive) return;
     try {
       roomHash = getRoomHash();
       if (roomHash && roomHash.length > 0) break;
@@ -258,6 +297,7 @@ async function main() {
     }
   }
 
+  if (!scriptActive) return;
   if (!roomHash) {
     console.error("[Wayground Cheat MDW] Timeout 120 detik. Pastikan sudah join game.");
     return;
@@ -267,6 +307,7 @@ async function main() {
 
   let quiz: QuizInfo;
   for (let attempt = 1; attempt <= 3; attempt++) {
+    if (!scriptActive) return;
     try {
       const response = await fetch("https://wayground.com/_api/main/game/" + roomHash);
       if (!response.ok) throw new Error("HTTP " + response.status);
@@ -286,6 +327,8 @@ async function main() {
     }
   }
 
+  if (!scriptActive) return;
+
   console.log("[Wayground Cheat MDW] " + quiz!.data.questions.length + " pertanyaan dimuat");
 
   const questionMap = new Map<string, QuizQuestion>();
@@ -297,7 +340,15 @@ async function main() {
   let retryCount = 0;
   const MAX_RETRY = 6;
 
-  setInterval(() => {
+  intervalId = setInterval(() => {
+    if (!scriptActive) {
+      clearInterval(intervalId);
+      return;
+    }
+    if (!isWaygroundJoin()) {
+      stopScript();
+      return;
+    }
     try {
       const questionInfo = getCurrentQuestionId();
       if (questionInfo && questionInfo !== lastQuestionID) {
