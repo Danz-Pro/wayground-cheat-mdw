@@ -32,11 +32,6 @@ const showNotification = (message: string, type: "success" | "error" | "info") =
   notif.onclick = dismiss;
 };
 
-const isWaygroundJoin = (): boolean => {
-  const path = window.location.pathname;
-  return path === "/join" || path === "/join/";
-};
-
 const createSettingsModal = () => {
   const overlay = document.createElement("div");
   overlay.id = "__mdw_settings_overlay";
@@ -446,47 +441,8 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
 let scriptActive = false;
 let intervalId: any = null;
 
-const stopScript = () => {
-  scriptActive = false;
-  if (intervalId !== null) {
-    clearInterval(intervalId);
-    intervalId = null;
-  }
-  clearAllOptionStyles();
-  console.log("[Wayground Cheat MDW] Script dihentikan. Navigasi keluar dari /join");
-  showNotification("Script dihentikan", "error");
-};
-
-const watchUrlChange = () => {
-  const origPush = history.pushState;
-  const origReplace = history.replaceState;
-
-  history.pushState = function() {
-    const result = origPush.apply(this, arguments as any);
-    if (!isWaygroundJoin() && scriptActive) stopScript();
-    return result;
-  };
-
-  history.replaceState = function() {
-    const result = origReplace.apply(this, arguments as any);
-    if (!isWaygroundJoin() && scriptActive) stopScript();
-    return result;
-  };
-
-  window.addEventListener("popstate", function() {
-    if (!isWaygroundJoin() && scriptActive) stopScript();
-  });
-};
-
 async function main() {
-  if (!isWaygroundJoin()) {
-    console.error("[Wayground Cheat MDW] Script hanya bisa diaktifkan di wayground.com/join");
-    showNotification("Script hanya bisa diaktifkan di wayground.com/join", "error");
-    return;
-  }
-
   scriptActive = true;
-  watchUrlChange();
 
   settingsModal = createSettingsModal();
   hookMenuButton();
@@ -554,10 +510,6 @@ async function main() {
   intervalId = setInterval(() => {
     if (!scriptActive) {
       clearInterval(intervalId);
-      return;
-    }
-    if (!isWaygroundJoin()) {
-      stopScript();
       return;
     }
     try {
