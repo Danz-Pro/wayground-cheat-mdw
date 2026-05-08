@@ -69,21 +69,35 @@ const stripHtml = (html: string): string => {
   return tmp.textContent || tmp.innerText || "";
 };
 
-const highlightAnswers = (question: QuizQuestion) => {
+let prevHighlightedElements: HTMLElement[] = [];
+
+const resetPreviousHighlights = () => {
+  for (const el of prevHighlightedElements) {
+    if (el && el.parentNode) {
+      el.style.opacity = "";
+      el.style.outline = "";
+      el.style.outlineOffset = "";
+      el.style.transition = "";
+    }
+  }
+  prevHighlightedElements = [];
+};
+
+const highlightAnswers = (question: QuizQuestion): boolean => {
   if (question.type !== "MCQ" && question.type !== "MSQ") {
-    return;
+    return false;
   }
 
   let optionElements: HTMLElement[];
   try {
     optionElements = getOptionElements();
   } catch (e: any) {
-    console.warn("[Wayground Cheat MDW] Could not find options: " + e.message);
-    return;
+    console.warn("[Wayground Cheat MDW] Opsi belum muncul: " + e.message);
+    return false;
   }
 
   const options = question.structure.options;
-  if (!options || !Array.isArray(options) || options.length === 0) return;
+  if (!options || !Array.isArray(options) || options.length === 0) return false;
 
   const answer = question.structure.answer;
   const correctAnswerIndices: number[] = [];
@@ -98,34 +112,61 @@ const highlightAnswers = (question: QuizQuestion) => {
     correctAnswerIndices.push(answer);
   }
 
-  if (correctAnswerIndices.length === 0) return;
+  if (correctAnswerIndices.length === 0) return false;
 
-  const correctAnswerTexts: Record<string, boolean> = {};
+  const correctAnswerTexts: string[] = [];
   correctAnswerIndices.forEach((idx) => {
     const opt = options[idx];
     if (opt) {
       const txt = stripHtml(opt.text).trim().toLowerCase();
       if (txt.length > 0) {
-        correctAnswerTexts[txt] = true;
+        correctAnswerTexts.push(txt);
       }
     }
   });
 
-  let correctCount = 0;
-  optionElements.forEach((elem, domIndex) => {
+  resetPreviousHighlights();
+
+  const matchedElements: Set<number> = new Set();
+  const matchedTexts: Set<string> = new Set();
+
+  for (let domIndex = 0; domIndex < optionElements.length; domIndex++) {
+    if (matchedElements.has(domIndex)) continue;
+
+    const elem = optionElements[domIndex];
+    const elemText = stripHtml(elem.textContent || "").trim().toLowerCase();
+
     let isCorrect = false;
 
     if (correctAnswerIndices.indexOf(domIndex) !== -1) {
       isCorrect = true;
     }
 
-    if (!isCorrect && Object.keys(correctAnswerTexts).length > 0) {
-      const elemText = stripHtml(elem.textContent || "").trim().toLowerCase();
-      for (const correctText in correctAnswerTexts) {
-        if (elemText.length > 0 && correctText.length > 0 &&
-            (elemText === correctText || elemText.indexOf(correctText) !== -1 || correctText.indexOf(elemText) !== -1)) {
+    if (!isCorrect && correctAnswerTexts.length > 0) {
+      for (const correctText of correctAnswerTexts) {
+        if (matchedTexts.has(correctText)) continue;
+        if (elemText.length === 0 || correctText.length === 0) continue;
+
+        if (elemText === correctText) {
           isCorrect = true;
+          matchedTexts.add(correctText);
           break;
+        }
+      }
+    }
+
+    if (!isCorrect && correctAnswerTexts.length > 0) {
+      for (const correctText of correctAnswerTexts) {
+        if (matchedTexts.has(correctText)) continue;
+        if (elemText.length === 0 || correctText.length === 0) continue;
+
+        const minLen = Math.min(elemText.length, correctText.length);
+        if (minLen > 3 && (elemText.length / correctText.length > 0.5 && correctText.length / elemText.length > 0.5)) {
+          if (elemText.indexOf(correctText) !== -1 || correctText.indexOf(elemText) !== -1) {
+            isCorrect = true;
+            matchedTexts.add(correctText);
+            break;
+          }
         }
       }
     }
@@ -140,20 +181,31 @@ const highlightAnswers = (question: QuizQuestion) => {
       }
     }
 
-    if (!isCorrect) {
-      elem.style.opacity = "0.2";
-      elem.style.transition = "opacity 0.3s ease";
-    } else {
+    if (isCorrect) {
+      matchedElements.add(domIndex);
+    }
+  }
+
+  let correctCount = 0;
+  optionElements.forEach((elem, domIndex) => {
+    prevHighlightedElements.push(elem);
+    if (matchedElements.has(domIndex)) {
       elem.style.outline = "3px solid #4CAF50";
       elem.style.outlineOffset = "2px";
       elem.style.transition = "outline 0.3s ease";
       correctCount++;
+    } else {
+      elem.style.opacity = "0.2";
+      elem.style.transition = "opacity 0.3s ease";
     }
   });
 
   if (correctCount > 0) {
     console.log("[Wayground Cheat MDW] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi");
+    return true;
   }
+
+  return false;
 };
 
 async function main() {
@@ -173,7 +225,7 @@ async function main() {
   }
 
   if (!roomHash) {
-    console.error("[Wayground Cheat MDW] Timeout 60 detik. Pastikan sudah join game.");
+    console.error("[Wayground Cheat MDW] Timeout 120 detik. Pastikan sudah join game.");
     return;
   }
 
@@ -202,18 +254,37 @@ async function main() {
 
   console.log("[Wayground Cheat MDW] " + quiz!.data.questions.length + " pertanyaan dimuat");
 
+  const questionMap = new Map<string, QuizQuestion>();
+  for (const q of quiz!.data.questions) {
+    questionMap.set(q._id, q);
+  }
+
   let lastQuestionID: string | undefined = undefined;
+  let retryCount = 0;
+  const MAX_RETRY = 6;
 
   setInterval(() => {
     try {
       const questionInfo = getCurrentQuestionId();
       if (questionInfo && questionInfo !== lastQuestionID) {
-        for (const q of quiz!.data.questions) {
-          if (questionInfo === q._id) {
-            highlightAnswers(q);
+        const question = questionMap.get(questionInfo);
+        if (question) {
+          const success = highlightAnswers(question);
+          if (success) {
             lastQuestionID = questionInfo;
-            break;
+            retryCount = 0;
+          } else {
+            retryCount++;
+            if (retryCount <= MAX_RETRY) {
+              console.log("[Wayground Cheat MDW] Opsi belum siap, retry " + retryCount + "/" + MAX_RETRY + "...");
+            } else {
+              console.warn("[Wayground Cheat MDW] Gagal menyorot soal setelah " + MAX_RETRY + " percobaan, lanjut ke soal berikutnya.");
+              lastQuestionID = questionInfo;
+              retryCount = 0;
+            }
           }
+        } else {
+          lastQuestionID = questionInfo;
         }
       }
     } catch {}
