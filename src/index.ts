@@ -14,7 +14,7 @@ const getRoomHash = (): string => {
   const pinia = getPiniaInstance();
   const gameDataStore = pinia._s.get("gameData");
   if (!gameDataStore) throw new Error("Could not find gameData store");
-  const roomHash = gameDataStore.$state.roomHash;
+  const roomHash = (gameDataStore as any).$state ? (gameDataStore as any).$state.roomHash : (gameDataStore as any).roomHash;
   if (!roomHash) throw new Error("Could not retrieve roomHash from gameData store");
   return roomHash;
 };
@@ -23,7 +23,8 @@ const getCurrentQuestionId = (): string => {
   const pinia = getPiniaInstance();
   const gameQuestionsStore = pinia._s.get("gameQuestions");
   if (!gameQuestionsStore) throw new Error("Could not find gameQuestions store");
-  const currentId = gameQuestionsStore.$state.currentId || gameQuestionsStore.$state.currentQuestionId;
+  const qs: any = gameQuestionsStore;
+  const currentId = (qs.$state ? qs.$state.currentId : qs.currentId) || (qs.$state ? qs.$state.currentQuestionId : qs.currentQuestionId);
   if (!currentId) throw new Error("Could not retrieve current question ID");
   return currentId;
 };
@@ -160,12 +161,15 @@ async function main() {
   console.log("[Wayground Cheat MDW] Menunggu game dimulai...");
 
   let roomHash = "";
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 120; i++) {
     try {
       roomHash = getRoomHash();
-      if (roomHash) break;
+      if (roomHash && roomHash.length > 0) break;
     } catch {}
     await new Promise(r => setTimeout(r, 1000));
+    if (i > 0 && i % 10 === 0) {
+      console.log("[Wayground Cheat MDW] Masih menunggu join game... (" + i + " detik)");
+    }
   }
 
   if (!roomHash) {
