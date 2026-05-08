@@ -1,5 +1,8 @@
 import { QuizQuestion, QuizInfo } from "./types";
 
+let wrongOpacity = 0.2;
+const defaultOpacity = 0.2;
+
 const showNotification = (message: string, type: "success" | "error" | "info") => {
   const existing = document.getElementById("__mdw_notif");
   if (existing) existing.remove();
@@ -32,6 +35,211 @@ const showNotification = (message: string, type: "success" | "error" | "info") =
 const isWaygroundJoin = (): boolean => {
   const path = window.location.pathname;
   return path === "/join" || path === "/join/";
+};
+
+const createSettingsModal = () => {
+  const overlay = document.createElement("div");
+  overlay.id = "__mdw_settings_overlay";
+  overlay.style.cssText = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:999998;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.3s ease;";
+
+  const modal = document.createElement("div");
+  modal.style.cssText = "background:linear-gradient(145deg,#1B3A5C,#0F2440);color:#fff;border-radius:16px;padding:0;width:380px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.5);overflow:hidden;transform:scale(0.9);transition:transform 0.3s ease;";
+
+  const header = document.createElement("div");
+  header.style.cssText = "background:#0D1B2A;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.08);";
+  header.innerHTML = "<div style=\"display:flex;align-items:center;gap:10px;\"><div style=\"width:32px;height:32px;border-radius:8px;background:#4CAF50;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:bold;\">W</div><div><div style=\"font-size:16px;font-weight:700;\">Wayground Cheat MDW</div><div style=\"font-size:11px;color:rgba(255,255,255,0.5);\">v2.0 by MDW</div></div></div>";
+
+  const closeBtn = document.createElement("button");
+  closeBtn.innerHTML = "&times;";
+  closeBtn.style.cssText = "background:none;border:none;color:rgba(255,255,255,0.6);font-size:22px;cursor:pointer;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:all 0.2s;";
+  closeBtn.onmouseover = function() { closeBtn.style.background = "rgba(255,255,255,0.1)"; closeBtn.style.color = "#fff"; };
+  closeBtn.onmouseout = function() { closeBtn.style.background = "none"; closeBtn.style.color = "rgba(255,255,255,0.6)"; };
+
+  const body = document.createElement("div");
+  body.style.cssText = "padding:20px;max-height:60vh;overflow-y:auto;";
+
+  const sectionTitle = function(text: string) {
+    const el = document.createElement("div");
+    el.style.cssText = "font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#4CAF50;margin-bottom:12px;margin-top:4px;";
+    el.textContent = text;
+    return el;
+  };
+
+  const sectionBox = document.createElement("div");
+  sectionBox.style.cssText = "margin-bottom:20px;";
+
+  sectionBox.appendChild(sectionTitle("Pengaturan"));
+
+  const opacityContainer = document.createElement("div");
+  opacityContainer.style.cssText = "background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;";
+
+  const opacityLabel = document.createElement("div");
+  opacityLabel.style.cssText = "display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;";
+  opacityLabel.innerHTML = "<span style=\"font-size:13px;font-weight:600;\">Opacity Jawaban Salah</span><span id=\"__mdw_opacity_val\" style=\"font-size:13px;font-weight:700;color:#4CAF50;background:rgba(76,175,80,0.15);padding:2px 10px;border-radius:20px;\">20%</span>";
+
+  const opacitySlider = document.createElement("input");
+  opacitySlider.type = "range";
+  opacitySlider.min = "0";
+  opacitySlider.max = "100";
+  opacitySlider.value = String(Math.round(wrongOpacity * 100));
+  opacitySlider.id = "__mdw_opacity_slider";
+  opacitySlider.style.cssText = "width:100%;height:6px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,0.1);border-radius:3px;outline:none;cursor:pointer;";
+
+  opacitySlider.oninput = function() {
+    const val = parseInt(opacitySlider.value, 10);
+    wrongOpacity = val / 100;
+    const valDisplay = document.getElementById("__mdw_opacity_val");
+    if (valDisplay) valDisplay.textContent = val + "%";
+    const fillPct = val + "%";
+    opacitySlider.style.background = "linear-gradient(to right, #4CAF50 0%, #4CAF50 " + fillPct + ", rgba(255,255,255,0.1) " + fillPct + ", rgba(255,255,255,0.1) 100%)";
+  };
+
+  opacityContainer.appendChild(opacityLabel);
+  opacityContainer.appendChild(opacitySlider);
+
+  const opacityHint = document.createElement("div");
+  opacityHint.style.cssText = "margin-top:8px;font-size:11px;color:rgba(255,255,255,0.4);";
+  opacityHint.textContent = "Semakin rendah opacity, jawaban salah semakin samar.";
+  opacityContainer.appendChild(opacityHint);
+
+  sectionBox.appendChild(opacityContainer);
+
+  const previewBox = document.createElement("div");
+  previewBox.style.cssText = "background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:12px 16px;display:flex;gap:10px;align-items:center;margin-top:10px;";
+
+  const previewCorrect = document.createElement("div");
+  previewCorrect.style.cssText = "flex:1;text-align:center;padding:10px;border-radius:8px;font-size:12px;font-weight:600;background:rgba(76,175,80,0.15);border:2px solid #4CAF50;";
+  previewCorrect.textContent = "Benar";
+
+  const previewWrong = document.createElement("div");
+  previewWrong.id = "__mdw_preview_wrong";
+  previewWrong.style.cssText = "flex:1;text-align:center;padding:10px;border-radius:8px;font-size:12px;font-weight:600;background:rgba(255,255,255,0.05);border:2px solid rgba(255,255,255,0.1);opacity:0.2;transition:opacity 0.3s ease;";
+  previewWrong.textContent = "Salah";
+
+  previewBox.appendChild(previewCorrect);
+  previewBox.appendChild(previewWrong);
+  sectionBox.appendChild(previewBox);
+
+  const originalOnInput = opacitySlider.oninput ? opacitySlider.oninput.bind(opacitySlider) : null;
+  opacitySlider.oninput = function(e) {
+    if (originalOnInput) originalOnInput(e as any);
+    const preview = document.getElementById("__mdw_preview_wrong");
+    if (preview) preview.style.opacity = String(wrongOpacity);
+  };
+
+  const guideBox = document.createElement("div");
+  guideBox.style.cssText = "margin-bottom:0px;";
+
+  guideBox.appendChild(sectionTitle("Petunjuk"));
+
+  const guideItems = [
+    ["1", "Aktifkan script di halaman wayground.com/join"],
+    ["2", "Tunggu notifikasi berhasil muncul"],
+    ["3", "Join game, jawaban benar otomatis disorot hijau"],
+    ["4", "Jawaban salah akan dibuat samar sesuai opacity"],
+  ];
+
+  for (let i = 0; i < guideItems.length; i++) {
+    const item = guideItems[i];
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:flex-start;gap:10px;padding:8px 0;";
+    if (i < guideItems.length - 1) row.style.borderBottom = "1px solid rgba(255,255,255,0.04)";
+
+    const num = document.createElement("div");
+    num.style.cssText = "width:22px;height:22px;min-width:22px;border-radius:6px;background:rgba(76,175,80,0.15);color:#4CAF50;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;";
+    num.textContent = item[0];
+
+    const txt = document.createElement("div");
+    txt.style.cssText = "font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;padding-top:2px;";
+    txt.textContent = item[1];
+
+    row.appendChild(num);
+    row.appendChild(txt);
+    guideBox.appendChild(row);
+  }
+
+  body.appendChild(sectionBox);
+  body.appendChild(guideBox);
+
+  const footer = document.createElement("div");
+  footer.style.cssText = "padding:14px 20px;background:rgba(0,0,0,0.2);border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;";
+  footer.innerHTML = "<span style=\"font-size:10px;color:rgba(255,255,255,0.3);\">wayground-cheat-mdw</span>";
+
+  const resetBtn = document.createElement("button");
+  resetBtn.textContent = "Reset Default";
+  resetBtn.style.cssText = "font-size:11px;color:rgba(255,255,255,0.6);background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.1);padding:6px 14px;border-radius:8px;cursor:pointer;transition:all 0.2s;";
+  resetBtn.onmouseover = function() { resetBtn.style.background = "rgba(255,255,255,0.15)"; resetBtn.style.color = "#fff"; };
+  resetBtn.onmouseout = function() { resetBtn.style.background = "rgba(255,255,255,0.08)"; resetBtn.style.color = "rgba(255,255,255,0.6)"; };
+  resetBtn.onclick = function() {
+    wrongOpacity = defaultOpacity;
+    opacitySlider.value = String(Math.round(defaultOpacity * 100));
+    if (opacitySlider.oninput) opacitySlider.oninput(null as any);
+    showNotification("Opacity direset ke default (20%)", "success");
+  };
+
+  footer.appendChild(resetBtn);
+
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+  modal.appendChild(body);
+  modal.appendChild(footer);
+  overlay.appendChild(modal);
+
+  const openModal = function() {
+    overlay.style.display = "flex";
+    opacitySlider.value = String(Math.round(wrongOpacity * 100));
+    const valDisplay = document.getElementById("__mdw_opacity_val");
+    if (valDisplay) valDisplay.textContent = Math.round(wrongOpacity * 100) + "%";
+    const preview = document.getElementById("__mdw_preview_wrong");
+    if (preview) preview.style.opacity = String(wrongOpacity);
+    const fillPct = Math.round(wrongOpacity * 100) + "%";
+    opacitySlider.style.background = "linear-gradient(to right, #4CAF50 0%, #4CAF50 " + fillPct + ", rgba(255,255,255,0.1) " + fillPct + ", rgba(255,255,255,0.1) 100%)";
+    requestAnimationFrame(function() {
+      overlay.style.opacity = "1";
+      modal.style.transform = "scale(1)";
+    });
+  };
+
+  const closeModal = function() {
+    overlay.style.opacity = "0";
+    modal.style.transform = "scale(0.9)";
+    setTimeout(function() { overlay.style.display = "none"; }, 300);
+  };
+
+  overlay.onclick = function(e: MouseEvent) {
+    if ((e.target as HTMLElement) === overlay) closeModal();
+  };
+  closeBtn.onclick = closeModal;
+
+  document.addEventListener("keydown", function(e: KeyboardEvent) {
+    if (e.key === "Escape") closeModal();
+  });
+
+  overlay.style.display = "none";
+  document.body.appendChild(overlay);
+
+  setTimeout(function() { if (opacitySlider.oninput) opacitySlider.oninput(null as any); }, 100);
+
+  return { openModal: openModal };
+};
+
+let settingsModal: { openModal: () => void } | null = null;
+
+const hookMenuButton = () => {
+  const waitForButton = function() {
+    const btn = document.querySelector<HTMLElement>("[data-testid='menu-button']");
+    if (btn) {
+      btn.addEventListener("click", function(e: MouseEvent) {
+        e.stopPropagation();
+        e.preventDefault();
+        if (settingsModal) settingsModal.openModal();
+      }, true);
+      console.log("[Wayground Cheat MDW] Tombol menu berhasil di-hook!");
+    } else {
+      setTimeout(waitForButton, 1000);
+    }
+  };
+  waitForButton();
 };
 
 const getPiniaInstance = () => {
@@ -222,13 +430,13 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
       elem.style.transition = "outline 0.3s ease";
       correctCount++;
     } else {
-      elem.style.opacity = "0.2";
+      elem.style.opacity = String(wrongOpacity);
       elem.style.transition = "opacity 0.3s ease";
     }
   }
 
   if (correctCount > 0) {
-    console.log("[Wayground Cheat MDW] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi");
+    console.log("[Wayground Cheat MDW] " + correctCount + " jawaban benar disorot dari " + optionElements.length + " opsi (opacity: " + wrongOpacity + ")");
     return true;
   }
 
@@ -280,9 +488,12 @@ async function main() {
   scriptActive = true;
   watchUrlChange();
 
+  settingsModal = createSettingsModal();
+  hookMenuButton();
+
   console.log("%c Wayground Cheat MDW ", "background:#1B3A5C;color:#fff;font-size:14px;font-weight:bold;padding:4px 8px;border-radius:4px;");
   console.log("[Wayground Cheat MDW] Menunggu game dimulai...");
-  showNotification("Script aktif! Menunggu kamu join game...", "success");
+  showNotification("Script aktif! Klik tombol menu (bars) untuk buka setting.", "success");
 
   let roomHash = "";
   for (let i = 0; i < 120; i++) {
@@ -376,7 +587,7 @@ async function main() {
   }, 500);
 
   console.log("[Wayground Cheat MDW] Aktif! Jawaban benar otomatis disorot.");
-  showNotification("Berhasil! " + quiz!.data.questions.length + " soal dimuat. Jawaban otomatis disorot.", "success");
+  showNotification("Berhasil! " + quiz!.data.questions.length + " soal dimuat.", "success");
 }
 
 main();
