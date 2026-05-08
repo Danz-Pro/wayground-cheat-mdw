@@ -1,5 +1,39 @@
 import { QuizQuestion, QuizInfo } from "./types";
 
+const showNotification = (message: string, type: "success" | "error" | "info") => {
+  const existing = document.getElementById("__mdw_notif");
+  if (existing) existing.remove();
+
+  const bgColor = type === "success" ? "#1B3A5C" : type === "error" ? "#C0392B" : "#2C3E50";
+  const borderColor = type === "success" ? "#4CAF50" : type === "error" ? "#E74C3C" : "#3498DB";
+  const icon = type === "success" ? "\u2713" : type === "error" ? "\u2717" : "\u2139";
+
+  const notif = document.createElement("div");
+  notif.id = "__mdw_notif";
+  notif.style.cssText = "position:fixed;top:20px;right:20px;z-index:999999;padding:14px 22px;border-radius:10px;color:#fff;font-family:'Segoe UI',Arial,sans-serif;font-size:14px;font-weight:600;box-shadow:0 6px 20px rgba(0,0,0,0.35);border-left:4px solid " + borderColor + ";background:" + bgColor + ";opacity:0;transform:translateX(40px);transition:opacity 0.4s ease,transform 0.4s ease;max-width:360px;cursor:pointer;";
+  notif.innerHTML = "<span style=\"margin-right:8px;font-size:18px;\">" + icon + "</span>" + message;
+  document.body.appendChild(notif);
+
+  requestAnimationFrame(function() {
+    notif.style.opacity = "1";
+    notif.style.transform = "translateX(0)";
+  });
+
+  const dismiss = function() {
+    notif.style.opacity = "0";
+    notif.style.transform = "translateX(40px)";
+    setTimeout(function() { if (notif.parentNode) notif.remove(); }, 400);
+  };
+
+  setTimeout(dismiss, 4000);
+  notif.onclick = dismiss;
+};
+
+const isWaygroundJoin = (): boolean => {
+  const url = window.location.href.toLowerCase();
+  return url.indexOf("wayground.com/join") !== -1;
+};
+
 const getPiniaInstance = () => {
   const root = document.querySelector("#root");
   if (!root) throw new Error("Could not find #root element");
@@ -202,8 +236,15 @@ const highlightAnswers = (question: QuizQuestion): boolean => {
 };
 
 async function main() {
+  if (!isWaygroundJoin()) {
+    console.error("[Wayground Cheat MDW] Script hanya bisa diaktifkan di wayground.com/join");
+    showNotification("Script hanya bisa diaktifkan di wayground.com/join", "error");
+    return;
+  }
+
   console.log("%c Wayground Cheat MDW ", "background:#1B3A5C;color:#fff;font-size:14px;font-weight:bold;padding:4px 8px;border-radius:4px;");
   console.log("[Wayground Cheat MDW] Menunggu game dimulai...");
+  showNotification("Script aktif! Menunggu kamu join game...", "success");
 
   let roomHash = "";
   for (let i = 0; i < 120; i++) {
@@ -284,6 +325,7 @@ async function main() {
   }, 500);
 
   console.log("[Wayground Cheat MDW] Aktif! Jawaban benar otomatis disorot.");
+  showNotification("Berhasil! " + quiz!.data.questions.length + " soal dimuat. Jawaban otomatis disorot.", "success");
 }
 
 main();
